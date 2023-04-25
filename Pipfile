@@ -12,6 +12,8 @@ pybit = "*"
 ccxt = "*"
 ta = "*"
 ta-lib = "*"
+matplotlib = "*"
+mplfinance = "*"
 
 [dev-packages]
 ipykernel = "*"
