@@ -1,35 +1,44 @@
 import pandas as pd
+from typing import Tuple, Optional
+from analysis import analysis_sma, analysis_macd, analysis_rsi
 
-def strategy(df, position_status, entry_price, take_profit_pct, stop_loss_pct):
-    # Calculate SMA with periods of 20, 50, and 100
-    df['sma_20'] = df['close'].rolling(window=20).mean()
-    df['sma_50'] = df['close'].rolling(window=50).mean()
-    df['sma_100'] = df['close'].rolling(window=100).mean()
+def strategy(df: pd.DataFrame, position_status: Optional[str], entry_price: Optional[float], take_profit_pct: float, stop_loss_pct: float) -> Tuple[Optional[str], Optional[float]]:
+    """
+    Implement a trading strategy based on SMA, MACD, and RSI indicators.
+
+    Parameters:
+    df (pd.DataFrame): DataFrame with historical data
+    position_status (str): Current position status ("long", "short", or None)
+    entry_price (float): Entry price for the current position
+    take_profit_pct (float): Take profit percentage
+    stop_loss_pct (float): Stop loss percentage
+
+    Returns:
+    tuple: Updated position status and entry price
+    """
+    # Calculate SMA with periods of 20 and 50
+    df['sma_20'] = analysis_sma(df['close'], 20)
+    df['sma_50'] = analysis_sma(df['close'], 50)
 
     # Calculate MACD
-    exp12 = df['close'].ewm(span=12, adjust=False).mean()
-    exp26 = df['close'].ewm(span=26, adjust=False).mean()
-    macd = exp12 - exp26
-    signal = macd.ewm(span=9, adjust=False).mean()
-    df['macd_hist'] = macd - signal
+    df['macd_line'], df['signal_line'], df['macd_hist'] = analysis_macd(df['close'])
 
-    # Add Open Interest (OI) data
-    # Note: Replace this with actual Open Interest data from the exchange
-    df['open_interest'] = pd.Series([0] * len(df), index=df.index)
+    # Calculate RSI
+    df['rsi'] = analysis_rsi(df['close'])
 
     last_close = df['close'].iloc[-1]
 
     # Implement your trading strategy using the indicators
     buy_signal = (
         df['sma_20'].iloc[-1] > df['sma_50'].iloc[-1] and
-        df['sma_50'].iloc[-1] > df['sma_100'].iloc[-1] and
-        df['macd_hist'].iloc[-1] > 0
+        df['macd_hist'].iloc[-1] > 0 and
+        df['rsi'].iloc[-1] < 30
     )
 
     sell_signal = (
         df['sma_20'].iloc[-1] < df['sma_50'].iloc[-1] and
-        df['sma_50'].iloc[-1] < df['sma_100'].iloc[-1] and
-        df['macd_hist'].iloc[-1] < 0
+        df['macd_hist'].iloc[-1] < 0 and
+        df['rsi'].iloc[-1] > 70
     )
 
     if position_status is None:
@@ -42,7 +51,8 @@ def strategy(df, position_status, entry_price, take_profit_pct, stop_loss_pct):
         stop_loss = entry_price * (1 - stop_loss_pct)
         close_long = (
             last_close >= take_profit or
-            last_close <= stop_loss
+            last_close <= stop_loss or
+            df['rsi'].iloc[-1] > 70
         )
         if close_long:
             return "close_long", last_close
@@ -51,7 +61,8 @@ def strategy(df, position_status, entry_price, take_profit_pct, stop_loss_pct):
         stop_loss = entry_price * (1 + stop_loss_pct)
         close_short = (
             last_close <= take_profit or
-            last_close >= stop_loss
+            last_close >= stop_loss or
+            df['rsi'].iloc[-1] < 30
         )
         if close_short:
             return "close_short", last_close
